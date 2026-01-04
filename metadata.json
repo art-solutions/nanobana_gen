@@ -1,0 +1,5 @@
+{
+  "name": "CultureShift AI",
+  "description": "Batch localize image galleries for different countries using Gemini 2.5 Flash. Retains composition while adapting people and geometry.",
+  "requestFramePermissions": []
+}
