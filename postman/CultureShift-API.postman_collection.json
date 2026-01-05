@@ -1,0 +1,417 @@
+{
+  "info": {
+    "name": "CultureShift AI API",
+    "description": "Complete API collection for CultureShift AI",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "2.0.0"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://resilient-loris-278.convex.cloud",
+      "type": "string"
+    },
+    {
+      "key": "testImageUrl",
+      "value": "https://images.unsplash.com/photo-1534528741775-53994a69daeb",
+      "type": "string"
+    },
+    {
+      "key": "savedJobId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "savedBatchId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Presets Management",
+      "description": "Preset endpoints",
+      "item": [
+        {
+          "name": "Create Preset",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"japan-urban\",\n  \"targetCountry\": \"Japan\",\n  \"additionalContext\": \"Tokyo street style\",\n  \"removeBranding\": true,\n  \"addBrandingColors\": true,\n  \"brandingColor\": \"#E91E63\",\n  \"addOwnLogo\": false,\n  \"ownLogoData\": null,\n  \"filenameFindPattern\": \"^.*$\",\n  \"filenameReplacePattern\": \"output.png\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/presets",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "presets"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List All Presets",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/presets",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "presets"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Preset by Name",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/presets/by-name?name=japan-urban",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "presets",
+                "by-name"
+              ],
+              "query": [
+                {
+                  "key": "name",
+                  "value": "japan-urban"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Preset",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"japan-urban\",\n  \"targetCountry\": \"Japan\",\n  \"additionalContext\": \"Tokyo street style\",\n  \"removeBranding\": true,\n  \"addBrandingColors\": true,\n  \"brandingColor\": \"#E91E63\",\n  \"addOwnLogo\": false,\n  \"ownLogoData\": null,\n  \"filenameFindPattern\": \"^.*$\",\n  \"filenameReplacePattern\": \"output.png\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/presets/by-name?name=japan-urban",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "presets",
+                "by-name"
+              ],
+              "query": [
+                {
+                  "key": "name",
+                  "value": "japan-urban"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Preset",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/presets/by-name?name=test-preset",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "presets",
+                "by-name"
+              ],
+              "query": [
+                {
+                  "key": "name",
+                  "value": "test-preset"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. Image Processing",
+      "description": "Processing endpoints",
+      "item": [
+        {
+          "name": "Process Single Image (with Preset)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"{{testImageUrl}}\",\n  \"presetName\": \"japan-urban\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/process/single",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "process",
+                "single"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Process Single Image (with Config)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"{{testImageUrl}}\",\n  \"config\": {\n    \"name\": \"japan-urban\",\n    \"targetCountry\": \"Japan\",\n    \"additionalContext\": \"Tokyo street style\",\n    \"removeBranding\": true,\n    \"addBrandingColors\": true,\n    \"brandingColor\": \"#E91E63\",\n    \"addOwnLogo\": false,\n    \"ownLogoData\": null,\n    \"filenameFindPattern\": \"^.*$\",\n    \"filenameReplacePattern\": \"output.png\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/process/single-with-config",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "process",
+                "single-with-config"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Process Batch (with Preset)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"urls\": [\n    \"https://images.unsplash.com/photo-1534528741775-53994a69daeb\"\n  ],\n  \"presetName\": \"japan-urban\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/process/batch",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "process",
+                "batch"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Process Batch (with Config)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"urls\": [\n    \"{{testImageUrl}}\"\n  ],\n  \"config\": {\n    \"name\": \"japan-urban\",\n    \"targetCountry\": \"Japan\",\n    \"additionalContext\": \"Tokyo street style\",\n    \"removeBranding\": true,\n    \"addBrandingColors\": true,\n    \"brandingColor\": \"#E91E63\",\n    \"addOwnLogo\": false,\n    \"ownLogoData\": null,\n    \"filenameFindPattern\": \"^.*$\",\n    \"filenameReplacePattern\": \"output.png\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/process/batch-with-config",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "process",
+                "batch-with-config"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. Job History",
+      "description": "Job endpoints",
+      "item": [
+        {
+          "name": "List All Jobs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/jobs?limit=50&offset=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "jobs"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Jobs by Status - Completed",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/jobs?status=completed",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "jobs"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "completed"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Jobs by Status - Failed",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/jobs?status=failed",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "jobs"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "failed"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Job by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/jobs/by-id?jobId={{savedJobId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "jobs",
+                "by-id"
+              ],
+              "query": [
+                {
+                  "key": "jobId",
+                  "value": "{{savedJobId}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Jobs by Batch ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/jobs/batch?batchId={{savedBatchId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "jobs",
+                "batch"
+              ],
+              "query": [
+                {
+                  "key": "batchId",
+                  "value": "{{savedBatchId}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

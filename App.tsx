@@ -1,10 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import JSZip from 'jszip';
+import { useMutation } from 'convex/react';
+import { api } from './convex/_generated/api';
+import { Id } from './convex/_generated/dataModel';
 import { Header } from './components/Header';
 import { UploadZone } from './components/UploadZone';
 import { GalleryItem } from './components/GalleryItem';
 import { ApiDocs } from './components/ApiDocs';
+import { JobHistoryList } from './components/JobHistoryList';
+import { PresetManager } from './components/PresetManager';
 import { ImageTask, ProcessingStatus, AppConfig, SavedSetup } from './types';
 import { generateLocalizedImage, fileToBase64, ensureApiKey } from './services/geminiService';
 import { generateOutputFilename } from './utils/filenameUtils';
@@ -35,33 +40,25 @@ const DEFAULT_CONFIG: AppConfig = {
 export default function App() {
   const [config, setConfig] = useState<AppConfig>(DEFAULT_CONFIG);
   const [customApiKey, setCustomApiKey] = useState('');
-  
+
   const [tasks, setTasks] = useState<ImageTask[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isProcessing, setIsProcessing] = useState(false);
   const [apiKeyReady, setApiKeyReady] = useState(false);
-  
-  // Setup Management State
-  const [savedSetups, setSavedSetups] = useState<SavedSetup[]>([]);
-  const [setupName, setSetupName] = useState('');
-  const [showLoadMenu, setShowLoadMenu] = useState(false);
 
   // View State
-  const [activeTab, setActiveTab] = useState<'gallery' | 'api'>('gallery');
+  const [activeTab, setActiveTab] = useState<'gallery' | 'api' | 'history'>('gallery');
 
-  // Initialize API Key check and load setups
+  // Convex mutations for job tracking
+  const createJob = useMutation(api.publicJobs.createJob);
+  const setJobProcessing = useMutation(api.publicJobs.setJobProcessing);
+  const setJobFailed = useMutation(api.publicJobs.setJobFailed);
+  const generateUploadUrl = useMutation(api.publicJobs.generateUploadUrl);
+  const setJobCompletedWithFile = useMutation(api.publicJobs.setJobCompletedWithFile);
+
+  // Initialize API Key check
   useEffect(() => {
     ensureApiKey().then(setApiKeyReady);
-    
-    // Load setups from localStorage
-    const stored = localStorage.getItem('cultureShiftSetups');
-    if (stored) {
-      try {
-        setSavedSetups(JSON.parse(stored));
-      } catch (e) {
-        console.error("Failed to parse saved setups", e);
-      }
-    }
   }, []);
 
   const handleFilesSelected = (files: File[]) => {
@@ -88,41 +85,12 @@ export default function App() {
     }
   };
 
-  const saveSetup = () => {
-    if (!setupName.trim()) {
-      alert("Please enter a name for this setup.");
-      return;
-    }
-    const newSetup: SavedSetup = {
-      name: setupName,
-      config: config,
-      timestamp: Date.now()
-    };
-    
-    // Check if name exists and overwrite or add new
-    const updatedSetups = savedSetups.filter(s => s.name !== setupName);
-    updatedSetups.push(newSetup);
-    
-    setSavedSetups(updatedSetups);
-    localStorage.setItem('cultureShiftSetups', JSON.stringify(updatedSetups));
-    setSetupName('');
-    alert(`Setup "${setupName}" saved!`);
-  };
-
-  const loadSetup = (setup: SavedSetup) => {
-    // Merge with default to ensure new fields like brandingColor are present even in old saves
+  const handleLoadPreset = (presetConfig: AppConfig) => {
+    // Merge with default to ensure new fields are present
     setConfig({
       ...DEFAULT_CONFIG,
-      ...setup.config
+      ...presetConfig
     });
-    setShowLoadMenu(false);
-  };
-
-  const deleteSetup = (name: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const updated = savedSetups.filter(s => s.name !== name);
-    setSavedSetups(updated);
-    localStorage.setItem('cultureShiftSetups', JSON.stringify(updated));
   };
 
   const processQueue = async () => {
@@ -131,19 +99,54 @@ export default function App() {
         await ensureApiKey();
         setApiKeyReady(true);
     }
-    
+
     setIsProcessing(true);
     // Ensure we are viewing the gallery when processing starts
     setActiveTab('gallery');
 
+    // Generate a batch ID for this processing session
+    const batchId = `batch_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
     for (const task of tasks) {
       if (task.status !== ProcessingStatus.IDLE && task.status !== ProcessingStatus.FAILED) continue;
 
-      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: ProcessingStatus.PROCESSING, error: undefined } : t));
+      let convexJobId: Id<"jobs"> | null = null;
 
       try {
+        // Create job in Convex database first
+        const base64Preview = task.originalPreviewUrl; // Use the preview URL as source
+        const outputFilename = generateOutputFilename(task.file.name, config.filenameFindPattern, config.filenameReplacePattern);
+
+        convexJobId = await createJob({
+          sourceUrl: base64Preview,
+          sourceName: task.file.name,
+          config: {
+            targetCountry: config.targetCountry,
+            additionalContext: config.additionalContext,
+            filenameFindPattern: config.filenameFindPattern,
+            filenameReplacePattern: config.filenameReplacePattern,
+            removeBranding: config.removeBranding,
+            addBrandingColors: config.addBrandingColors,
+            brandingColor: config.brandingColor,
+            addOwnLogo: config.addOwnLogo,
+            ownLogoData: config.ownLogoData,
+          },
+          batchId,
+        });
+
+        // Update local state with job ID and processing status
+        setTasks(prev => prev.map(t => t.id === task.id ? {
+          ...t,
+          status: ProcessingStatus.PROCESSING,
+          error: undefined,
+          convexJobId: convexJobId as string
+        } : t));
+
+        // Update Convex job to processing
+        await setJobProcessing({ jobId: convexJobId });
+
         const base64 = await fileToBase64(task.file);
-        
+
         // Pass the entire config object and optional custom key
         const { imageUrl, usage } = await generateLocalizedImage(
           base64,
@@ -152,21 +155,71 @@ export default function App() {
           customApiKey
         );
 
+        // Upload the generated image to Convex storage
+        // 1. Get upload URL from Convex
+        const uploadUrl = await generateUploadUrl();
+
+        // 2. Convert base64 data URL to Blob
+        const base64Data = imageUrl.split(',')[1];
+        const byteCharacters = atob(base64Data);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: 'image/png' });
+
+        // 3. Upload to Convex storage
+        const uploadResponse = await fetch(uploadUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'image/png' },
+          body: blob,
+        });
+
+        if (!uploadResponse.ok) {
+          throw new Error('Failed to upload image to storage');
+        }
+
+        const { storageId } = await uploadResponse.json();
+
+        // 4. Update Convex job with storage ID
+        await setJobCompletedWithFile({
+          jobId: convexJobId,
+          storageId: storageId,
+          generatedFileName: outputFilename,
+          promptTokens: usage?.promptTokens,
+          candidateTokens: usage?.candidateTokens,
+          totalTokens: usage?.totalTokens,
+        });
+
+        // Update local state
         setTasks(prev => {
-           // Auto-select successful tasks upon completion if user hasn't heavily modified selection
-           return prev.map(t => t.id === task.id ? { 
-            ...t, 
-            status: ProcessingStatus.COMPLETED, 
+          return prev.map(t => t.id === task.id ? {
+            ...t,
+            status: ProcessingStatus.COMPLETED,
             generatedUrl: imageUrl,
             usage: usage
           } : t);
         });
 
       } catch (error: any) {
-        setTasks(prev => prev.map(t => t.id === task.id ? { 
-          ...t, 
-          status: ProcessingStatus.FAILED, 
-          error: error.message 
+        // Update Convex job to failed if we have a job ID
+        if (convexJobId) {
+          try {
+            await setJobFailed({
+              jobId: convexJobId,
+              error: error.message || 'Processing failed'
+            });
+          } catch (e) {
+            console.error('Failed to update job status in Convex:', e);
+          }
+        }
+
+        // Update local state
+        setTasks(prev => prev.map(t => t.id === task.id ? {
+          ...t,
+          status: ProcessingStatus.FAILED,
+          error: error.message
         } : t));
       }
     }
@@ -255,53 +308,12 @@ export default function App() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
           {/* Config Panel */}
           <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700 shadow-xl lg:col-span-1 h-fit">
-            
-            {/* Setup Management */}
-            <div className="mb-6 p-3 bg-gray-900/50 rounded-lg border border-gray-700">
-              <div className="flex justify-between items-center mb-2">
-                 <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Setup Manager</h3>
-                 <button 
-                   onClick={() => setShowLoadMenu(!showLoadMenu)}
-                   className="text-xs text-blue-400 hover:text-blue-300"
-                 >
-                   {showLoadMenu ? 'Cancel Load' : 'Load Saved'}
-                 </button>
-              </div>
 
-              {showLoadMenu ? (
-                <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar">
-                  {savedSetups.length === 0 ? (
-                    <p className="text-xs text-gray-500 text-center py-2">No saved setups</p>
-                  ) : (
-                    savedSetups.map(s => (
-                      <div key={s.name} 
-                           onClick={() => loadSetup(s)}
-                           className="flex justify-between items-center p-2 rounded hover:bg-gray-800 cursor-pointer group"
-                      >
-                        <span className="text-sm text-gray-300">{s.name}</span>
-                        <button onClick={(e) => deleteSetup(s.name, e)} className="text-red-500 opacity-0 group-hover:opacity-100 px-1">×</button>
-                      </div>
-                    ))
-                  )}
-                </div>
-              ) : (
-                <div className="flex gap-2">
-                  <input 
-                    type="text" 
-                    placeholder="New setup name..." 
-                    value={setupName}
-                    onChange={(e) => setSetupName(e.target.value)}
-                    className="flex-1 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:border-blue-500 outline-none"
-                  />
-                  <button 
-                    onClick={saveSetup}
-                    className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1 rounded text-sm transition-colors"
-                  >
-                    Save
-                  </button>
-                </div>
-              )}
-            </div>
+            {/* Preset Manager - Convex-based */}
+            <PresetManager
+              currentConfig={config}
+              onLoadPreset={handleLoadPreset}
+            />
 
             <div className="mb-6">
                 <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">API Key (Optional)</label>
@@ -473,25 +485,35 @@ export default function App() {
             
             {/* View Switching Tabs */}
             <div className="flex border-b border-gray-700">
-               <button 
+               <button
                  onClick={() => setActiveTab('gallery')}
                  className={`px-6 py-3 font-medium text-sm transition-colors border-b-2 ${
-                   activeTab === 'gallery' 
-                     ? 'border-blue-500 text-blue-400' 
+                   activeTab === 'gallery'
+                     ? 'border-blue-500 text-blue-400'
                      : 'border-transparent text-gray-400 hover:text-gray-200'
                  }`}
                >
                  Gallery View
                </button>
-               <button 
+               <button
                  onClick={() => setActiveTab('api')}
                  className={`px-6 py-3 font-medium text-sm transition-colors border-b-2 ${
-                   activeTab === 'api' 
-                     ? 'border-purple-500 text-purple-400' 
+                   activeTab === 'api'
+                     ? 'border-purple-500 text-purple-400'
                      : 'border-transparent text-gray-400 hover:text-gray-200'
                  }`}
                >
                  API Integration
+               </button>
+               <button
+                 onClick={() => setActiveTab('history')}
+                 className={`px-6 py-3 font-medium text-sm transition-colors border-b-2 ${
+                   activeTab === 'history'
+                     ? 'border-green-500 text-green-400'
+                     : 'border-transparent text-gray-400 hover:text-gray-200'
+                 }`}
+               >
+                 Job History
                </button>
             </div>
 
@@ -576,9 +598,12 @@ export default function App() {
                   </div>
                 )}
               </>
-            ) : (
+            ) : activeTab === 'api' ? (
               // API Docs View
               <ApiDocs config={config} />
+            ) : (
+              // Job History View
+              <JobHistoryList />
             )}
             
           </div>

@@ -1,0 +1,2 @@
+Analyze the folder project and Rebuild and integrate convex as backend for this app for storing job in db and files and managing queue._ in final we need a api endpoint to create job  from single file and for batch file using just in json iput: url of file and preset name .
+plz anterview me for more details, and befor plan aproval.

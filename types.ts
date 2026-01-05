@@ -20,6 +20,7 @@ export interface ImageTask {
   status: ProcessingStatus;
   error?: string;
   usage?: TokenUsage;
+  convexJobId?: string; // Convex database job ID for tracking
 }
 
 export interface AppConfig {
